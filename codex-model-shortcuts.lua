@@ -10,7 +10,9 @@ M.config = {
     trigger = 0.03,
     picker = 0.02,
     move = 0.02,
-    layer = 0.02,
+    -- Nested panels can render more slowly while Codex or the Mac is busy.
+    -- Allow 40 ms after opening or closing a model/reasoning panel.
+    layer = 0.04,
     final = 0.02,
     focus = 0.03,
   },
@@ -68,10 +70,10 @@ local function afterShortcutModifiersReleased(callback)
 end
 
 local function stepDelay(key)
-  if key == "right" or key == "left" then
+  if key == "right" or key == "left" or key == "return" then
     return M.config.timing.layer
   end
-  if key == "return" or key == "escape" then
+  if key == "escape" then
     return M.config.timing.final
   end
   return M.config.timing.move
