@@ -132,6 +132,8 @@ After keyboard navigation, Codex may leave focus on the model control. Pressing 
 
 The Codex menu order may differ because of app updates, account availability, or model rollout changes. Open the picker manually, count the required arrow presses, and update the relevant `steps` list.
 
+The default timing waits 40 ms after opening or closing each nested model or reasoning panel. This small buffer makes keyboard navigation more reliable when Codex or the Mac is under load, while ordinary movement between menu items remains at 20 ms.
+
 ### Nothing happens
 
 Confirm that:
