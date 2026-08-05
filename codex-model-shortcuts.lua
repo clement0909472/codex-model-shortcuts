@@ -25,7 +25,7 @@ M.config = {
       },
     },
     {
-      key = "L",
+      key = "M",
       label = "Sol High",
       steps = {
         "down", "right", "return",
@@ -34,7 +34,7 @@ M.config = {
       },
     },
     {
-      key = "M",
+      key = "L",
       label = "Terra High",
       steps = {
         "down", "right", "down", "return",

@@ -17,9 +17,11 @@ The included presets are:
 
 | Shortcut | Preset | Suggested use |
 | --- | --- | --- |
-| `Cmd + Shift + M` | GPT-5.6 Terra High | Fast, focused tasks |
-| `Cmd + Shift + L` | GPT-5.6 Sol High | Standard tasks and the default intelligence/speed tradeoff |
 | `Cmd + Shift + K` | GPT-5.6 Luna High | Cost-efficient long-running or overnight tasks |
+| `Cmd + Shift + L` | GPT-5.6 Terra High | Fast, focused tasks |
+| `Cmd + Shift + M` | GPT-5.6 Sol High | Standard tasks and the default intelligence/speed tradeoff |
+
+The default keys progress from `K` to `M` with increasing benchmark intelligence: Luna High, Terra High, then Sol High.
 
 As of August 2026, these are our practical recommendations based on the current [Artificial Analysis model comparison](https://artificialanalysis.ai/models?models=claude-opus-5%2Cclaude-opus-5-xhigh%2Cclaude-opus-5-high%2Cclaude-opus-5-medium%2Cclaude-fable-5%2Cgrok-4-5%2Cgpt-5-6-sol%2Cgpt-5-6-sol-xhigh%2Cgpt-5-6-sol-high%2Cgpt-5-6-sol-medium%2Cgpt-5-6-terra%2Cgpt-5-6-terra-high%2Cgpt-5-6-terra-xhigh%2Cgpt-5-6-terra-medium%2Cgpt-5-6-terra-low%2Cgpt-5-6-sol-low%2Cgpt-5-6-luna%2Cgpt-5-6-luna-low%2Cgpt-5-6-luna-high%2Cgpt-5-6-luna-xhigh%2Cgpt-5-6-luna-medium%2Cdeepseek-v4-flash%2Cdeepseek-v4-pro-high%2Cmistral-medium-3-5):
 
@@ -104,7 +106,7 @@ Example:
 
 ```lua
 {
-  key = "M",
+  key = "L",
   label = "Terra High",
   steps = {
     "down", "right", "down", "return",
