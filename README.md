@@ -29,6 +29,37 @@ As of August 2026, these are our practical recommendations based on the current 
 
 These are project recommendations, not permanent or universal rankings. Benchmarks, prices, available models, and Codex menu layouts can change.
 
+## Install with your coding agent
+
+Use a coding agent with access to your Mac. Copy this prompt with GitHub's copy button and send it to the agent:
+
+```text
+Set up the tool from this repository on my Mac: https://github.com/clement0909472/codex-model-shortcuts
+```
+
+The agent should follow the installation instructions below. macOS may still require you to approve Hammerspoon's Accessibility permission manually.
+
+### Installation instructions for the agent
+
+When a user asks you to set up this repository, complete the installation on their Mac as follows:
+
+1. Confirm the machine is running macOS and that you have access to a local shell.
+2. Inspect the repository and preserve the user's existing Hammerspoon configuration. Never overwrite `~/.hammerspoon/init.lua` or unrelated files.
+3. Check whether Hammerspoon is installed. If it is missing and Homebrew is available, run `brew install --cask hammerspoon`. If Homebrew is unavailable, explain the blocker before installing any additional package manager.
+4. Create `~/.hammerspoon` if needed and copy `codex-model-shortcuts.lua` from this repository to `~/.hammerspoon/codex-model-shortcuts.lua`.
+5. Ensure `~/.hammerspoon/init.lua` contains the following loader exactly once:
+
+   ```lua
+   local codexModelShortcuts = dofile(hs.configdir .. "/codex-model-shortcuts.lua")
+   codexModelShortcuts.start()
+   ```
+
+6. Start Hammerspoon if it is not running. Reload its configuration after changing the files.
+7. Check that Hammerspoon has macOS Accessibility access. If it does not, open **System Settings → Privacy & Security → Accessibility** and ask the user to enable Hammerspoon. Do not attempt to bypass macOS permission controls.
+8. Verify that the Lua file exists, the loader appears only once, and the configuration loads without an error. Then ask the user to focus Codex and test one shortcut.
+
+Keep the installation idempotent: running it again must update the script without duplicating the loader or deleting the user's existing configuration.
+
 ## Requirements
 
 - macOS
