@@ -5,14 +5,16 @@ M.config = {
   shortcutModifiers = { "cmd", "shift" },
   pickerModifiers = { "ctrl", "shift" },
   pickerKey = "m",
+  keyStrokeDelay = 18000,
+  -- Reliability-first profile: presets still complete in about one second.
   timing = {
-    modifiersReleasedPoll = 0.005,
-    trigger = 0.03,
-    picker = 0.02,
-    move = 0.02,
-    layer = 0.02,
-    final = 0.02,
-    focus = 0.03,
+    modifiersReleasedPoll = 0.01,
+    trigger = 0.05,
+    picker = 0.08,
+    move = 0.035,
+    layer = 0.07,
+    final = 0.05,
+    focus = 0.04,
   },
   presets = {
     {
@@ -53,7 +55,7 @@ local function codexIsFrontmost()
 end
 
 local function press(key)
-  hs.eventtap.keyStroke({}, key, 10000)
+  hs.eventtap.keyStroke({}, key, M.config.keyStrokeDelay)
 end
 
 local function afterShortcutModifiersReleased(callback)
@@ -68,10 +70,10 @@ local function afterShortcutModifiersReleased(callback)
 end
 
 local function stepDelay(key)
-  if key == "right" or key == "left" then
+  if key == "right" or key == "left" or key == "return" then
     return M.config.timing.layer
   end
-  if key == "return" or key == "escape" then
+  if key == "escape" then
     return M.config.timing.final
   end
   return M.config.timing.move
@@ -194,7 +196,7 @@ local function selectPreset(preset)
   busy = true
 
   hs.timer.doAfter(M.config.timing.trigger, function()
-    hs.eventtap.keyStroke(M.config.pickerModifiers, M.config.pickerKey, 50000)
+    hs.eventtap.keyStroke(M.config.pickerModifiers, M.config.pickerKey, 70000)
     hs.timer.doAfter(M.config.timing.picker, function()
       runKeySequence(preset.steps, 1, function()
         busy = false
