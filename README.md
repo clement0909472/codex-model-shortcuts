@@ -1,6 +1,6 @@
 # Codex Model Shortcuts
 
-Keyboard presets for Codex Desktop on macOS, using Hammerspoon.
+Keyboard presets for Codex Desktop and Codex Subscription Router on macOS, using Hammerspoon.
 
 ## Shortcuts
 
@@ -12,7 +12,9 @@ Keyboard presets for Codex Desktop on macOS, using Hammerspoon.
 | Option + Command + J | GPT-6 Luna | Max | Standard |
 | Option + Command + H | GPT-6 Astra | Low | Fast |
 
-Shortcuts only act while Codex is frontmost. The script locates the model button
+Shortcuts act in whichever supported app is frontmost (`com.openai.codex` or
+`app.cdxmux.multi`). Switching apps or windows interrupts a running shortcut.
+The script locates the model button
 through macOS Accessibility and clicks its current frame, rather than opening
 recent models with Ctrl + Shift + M. The opening click was manually validated
 by the user in September 2026.
@@ -29,7 +31,8 @@ notification.
 
 ## Install or update
 
-Requires macOS, Codex Desktop, [Hammerspoon](https://www.hammerspoon.org/), and
+Requires macOS, Codex Desktop or Codex Subscription Router,
+[Hammerspoon](https://www.hammerspoon.org/), and
 Accessibility permission for Hammerspoon.
 
 1. Preserve the existing Hammerspoon configuration and make a backup.
@@ -53,7 +56,9 @@ Option + Command + M will only open the picker.
 Run `lua test-picker.lua`. Tests use a mocked Accessibility tree and keyboard
 state machine, including 170 model/effort/speed transitions. They do not control
 Codex. The shortcut behavior, including Fast switching and native focus restoration,
-was manually tested in Codex Desktop on the author’s Mac.
+was manually tested in Codex Desktop on the author’s Mac. The Router picker was
+opened and closed on the live app; full preset changes on Router are covered by
+the mocked test but have not been manually tested.
 
 If the current model/effort cannot be read, the script stops before opening the
 picker. If Speed's state cannot be read, it stops on Speed with an alert; the

@@ -1,7 +1,7 @@
 local M = {}
 
 M.config = {
-  codexBundleID = "com.openai.codex",
+  codexBundleIDs = { ["com.openai.codex"] = true, ["app.cdxmux.multi"] = true },
   shortcutModifiers = { "cmd", "alt" },
   keyStrokeDelay = 18000,
   -- Keep animation waits at menu boundaries; plain navigation stays quick.
@@ -64,10 +64,11 @@ end
 
 local busy = false
 local activeWindow
+local activeBundleID
 
 local function codexIsFrontmost()
   local app = hs.application.frontmostApplication()
-  return app and app:bundleID() == M.config.codexBundleID
+  return app and M.config.codexBundleIDs[app:bundleID()] == true
 end
 
 local function press(key)
@@ -87,7 +88,9 @@ end
 
 local function runKeySequence(steps, index, done)
   if not codexIsFrontmost() then busy = false; return end
-  local root = hs.axuielement.applicationElement(hs.application.frontmostApplication())
+  local app = hs.application.frontmostApplication()
+  if app:bundleID() ~= activeBundleID then busy = false; return end
+  local root = hs.axuielement.applicationElement(app)
   if root:attributeValue("AXFocusedWindow") ~= activeWindow then
     busy = false
     return
@@ -160,7 +163,7 @@ local function modelButton()
     hs.alert.show("Codex : position du bouton modèle indisponible")
     return
   end
-  return candidates[1], window, frame
+  return candidates[1], window, frame, app:bundleID()
 end
 
 local function clickFrame(frame)
@@ -278,7 +281,7 @@ end
 
 local function selectPreset(preset)
   if busy or not codexIsFrontmost() then return end
-  local button, window, frame = modelButton()
+  local button, window, frame, bundleID = modelButton()
   if not button then return end
   local current = readSelection(button)
   if not current then
@@ -286,7 +289,7 @@ local function selectPreset(preset)
     return
   end
   local modelDelta, effortDelta = M.plan(current, preset)
-  busy, activeWindow = true, window
+  busy, activeWindow, activeBundleID = true, window, bundleID
   clickFrame(frame)
   local steps = { "down" }
   if modelDelta ~= 0 then

@@ -56,6 +56,11 @@ windowAttributes.AXChildren = { button }
 buttonAttributes.AXFrame.x = 9000
 shortcuts.openPicker()
 assert(#clicks == 2 and #alerts == 3, "Do not click off-window elements")
+buttonAttributes.AXFrame.x = -1000
+bundle = "app.cdxmux.multi"
+shortcuts.openPicker()
+assert(#clicks == 3 and clicks[3].x == -900, "Router uses its focused window")
+bundle = "com.openai.codex"
 print("Picker checks passed (mock accessibility, no UI interaction)")
 
 -- Minimal deltas, including the Ultra -> Luna -> Medium fallback.
@@ -170,6 +175,7 @@ for model = 1, 3 do
         timers, alerts = {}, {}
         submenuOpens, modelArrows, keyCount = 0, 0, 0
         update()
+        bundle = cases % 2 == 0 and 'com.openai.codex' or 'app.cdxmux.multi'
         bindings[preset.key]()
         local count = 0
         while #timers > 0 do
@@ -193,6 +199,7 @@ for model = 1, 3 do
     end
   end
 end
+bundle = 'com.openai.codex'
 -- Unknown speed state must stop, without blindly toggling it.
 currentModel, currentEffort, fast = 1, 0, false
 phase, position, toggleCount, arrowCount = 'closed', -1, 0, 0
@@ -216,6 +223,14 @@ bindings.M() -- ignored while the first selection is running
 bundle = 'other.app'
 while #timers > 0 do table.remove(timers, 1)() end
 assert(currentModel == 1 and currentEffort == 0 and position == -1)
+bundle = 'com.openai.codex'
+phase, position = 'closed', -1
+timers = {}
+bindings.M()
+bundle = 'app.cdxmux.multi'
+while #timers > 0 do table.remove(timers, 1)() end
+assert(currentModel == 1 and currentEffort == 0 and position == -1,
+  'Switching between Codex apps must cancel the active sequence')
 bundle = 'com.openai.codex'
 print('Focus-change cancellation and overlapping shortcut checks passed')
 
