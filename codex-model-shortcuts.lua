@@ -20,6 +20,7 @@ M.config = {
     { key = "K", label = "Sol 6.1 High", model = "GPT-6.1 Sol", effort = 2, speed = "standard" },
     { key = "J", label = "Luna Max", model = "GPT-6 Luna", effort = 4, speed = "standard" },
     { key = "H", label = "Astra Low Ultrarapide", model = "GPT-6 Astra", effort = 0, speed = "ultrafast" },
+    { key = "G", label = "Sol 6.1 Low Ultrarapide", model = "GPT-6.1 Sol", effort = 0, speed = "ultrafast" },
   },
 }
 
@@ -61,6 +62,7 @@ local activeBundleID
 local activePreset
 local speedReadings = {}
 local reasoningReadings = {}
+local openingReadings = {}
 local sentKeys = {}
 
 local function codexIsFrontmost()
@@ -85,11 +87,18 @@ local function afterShortcutModifiersReleased(callback)
 end
 
 local function runKeySequence(steps, index, done)
-  if not codexIsFrontmost() then busy = false; return end
+  if not codexIsFrontmost() then
+    hs.printf("Codex switcher: cancelled (Codex no longer frontmost)")
+    busy = false; return
+  end
   local app = hs.application.frontmostApplication()
-  if app:bundleID() ~= activeBundleID then busy = false; return end
+  if app:bundleID() ~= activeBundleID then
+    hs.printf("Codex switcher: cancelled (application changed)")
+    busy = false; return
+  end
   local root = hs.axuielement.applicationElement(app)
   if root:attributeValue("AXFocusedWindow") ~= activeWindow then
+    hs.printf("Codex switcher: cancelled (focused window changed)")
     busy = false
     return
   end
@@ -120,7 +129,8 @@ function M.openPicker()
   if not codexIsFrontmost() then return end
   local app = hs.application.frontmostApplication()
   local window = axAttribute(hs.axuielement.applicationElement(app), "AXFocusedWindow")
-  if not window then return end
+  if not window then hs.printf("Codex switcher: ignored (no focused window)"); return end
+  hs.printf("Codex switcher: opening picker")
   sentKeys[#sentKeys + 1] = "ctrl+shift+m"
   hs.eventtap.keyStroke({ "ctrl", "shift" }, "m", M.config.keyStrokeDelay)
   return window, app:bundleID()
@@ -149,11 +159,12 @@ end
 
 local function fail(message)
   busy = false
+  hs.printf("Codex switcher: failed (%s)", message)
   -- Keep the actual failing state, before another shortcut replaces the menu.
   local ok, path = pcall(function()
     return writeDiagnostic({version = 3, error = message, requestedPreset = activePreset,
       capturedAt = os.date("!%Y-%m-%dT%H:%M:%SZ"), completed = false, speedReadings = speedReadings,
-      reasoningReadings = reasoningReadings, sentKeys = sentKeys,
+      reasoningReadings = reasoningReadings, openingReadings = openingReadings, sentKeys = sentKeys,
       failure = M.captureDiagnostic(focusedElement())})
   end)
   local saved = ok and path and "\nRapport diagnostic.json actualisé." or ""
@@ -417,7 +428,10 @@ local function setEffort(preset)
   if initial == nil then return end
   local function advance(current, remaining)
     if current == preset.effort then
-      runKeySequence({ { key = "return", delay = M.config.timing.picker } }, 1, function() busy = false end)
+      runKeySequence({ { key = "return", delay = M.config.timing.picker } }, 1, function()
+        busy = false
+        hs.printf("Codex switcher: completed (%s)", preset.key)
+      end)
       return
     end
     if remaining == 0 then fail("limite de déplacement du raisonnement atteinte"); return end
@@ -443,90 +457,135 @@ local function setEffort(preset)
   advance(initial, math.abs(preset.effort - initial))
 end
 
--- Focus can lag behind a key event. Wait for each move before sending the
--- next one; Return must never land on the reset-to-default action.
+-- Wait for a focus change before another arrow or Return, including reopenings.
+local function focusIdentity(control)
+  return table.concat({tostring(axAttribute(control, "AXRole")),
+    tostring(axAttribute(control, "AXTitle")), tostring(axAttribute(control, "AXDescription"))}, "\n")
+end
+
+local function moveFocus(key, done)
+  local previous = focusIdentity(focusedElement())
+  local function confirm(polls)
+    local control = focusedElement()
+    if focusIdentity(control) ~= previous then done(control); return end
+    if polls < 10 then
+      hs.timer.doAfter(0.05, function()
+        runKeySequence({}, 1, function() confirm(polls + 1) end)
+      end)
+    else fail("déplacement du focus non confirmé, séquence arrêtée") end
+  end
+  runKeySequence({key}, 1, function() confirm(0) end)
+end
+
+local function isReset(label)
+  return label == "Rétablir la sélection par défaut" or label == "Réinitialiser"
+    or label == "Reset to default"
+end
+
+-- Codex can restore focus to Power, Speed or Reset instead of the model row.
+-- Only traverse recognized picker controls; never press Return on Reset/Power.
+local function focusModel(done, remaining, polls)
+  local control = focusedElement()
+  local role = axAttribute(control, "AXRole")
+  openingReadings[#openingReadings + 1] = {role = role, poll = polls or 0}
+  -- The installed picker focuses a menu item in requestAnimationFrame.
+  -- A container is not permission to navigate, inspect its text or press Return.
+  if (role == nil or role == "AXGroup") and (polls or 0) < 10 then
+    hs.timer.doAfter(0.05, function()
+      runKeySequence({}, 1, function() focusModel(done, remaining, (polls or 0) + 1) end)
+    end)
+    return
+  end
+  local label = axAttribute(control, "AXTitle")
+  local power = label == "Puissance" or label == "Power"
+  local speed = M.readSpeed(control)
+  local currentModel = readModel(control)
+  local opensModelList = false
+  for _, attribute in ipairs({"AXTitle", "AXDescription"}) do
+    local text = axAttribute(control, attribute)
+    if text == "Sélectionner le modèle" or text == "Sélectionner un modèle"
+        or text == "Select model" then opensModelList = true end
+  end
+  if axAttribute(control, "AXEnabled") ~= false then
+    if (role == "AXMenuItem" or role == "AXButton")
+        and (opensModelList or (currentModel and not power and not speed and not isReset(label))) then
+      done(currentModel); return
+    end
+    if role == "AXMenuItem" and (power or speed or isReset(label)) and remaining > 0 then
+      moveFocus("down", function() focusModel(done, remaining - 1) end); return
+    end
+  end
+  fail("modèle courant illisible dans le panneau (" .. tostring(role) .. ")")
+end
+
 local function focusReasoning(preset, fromSpeed)
   local function move(key, remaining)
-    local previous = axAttribute(focusedElement(), "AXTitle")
-    local function confirm(polls)
-      local control = focusedElement()
+    moveFocus(key, function(control)
       local label = axAttribute(control, "AXTitle")
-      if label == previous then
-        if polls < 10 then
-          hs.timer.doAfter(0.05, function()
-            runKeySequence({}, 1, function() confirm(polls + 1) end)
-          end)
-        else fail("déplacement du focus non confirmé, séquence arrêtée") end
-        return
-      end
       if axAttribute(control, "AXRole") ~= "AXMenuItem" then
         fail("focus inattendu avant le raisonnement"); return
       end
       if label == "Puissance" or label == "Power" then setEffort(preset)
-      elseif fromSpeed and remaining > 0 and (label == "Rétablir la sélection par défaut"
-          or label == "Réinitialiser" or label == "Reset to default") then
-        move("down", remaining - 1)
+      elseif fromSpeed and remaining > 0 and isReset(label) then move("down", remaining - 1)
       else fail("contrôle inattendu avant le raisonnement") end
-    end
-    runKeySequence({key}, 1, function() confirm(0) end)
+    end)
   end
   move(fromSpeed and "down" or "up", fromSpeed and 1 or 0)
 end
 
 local function selectPreset(preset)
-  if busy or not codexIsFrontmost() then return end
-  activePreset, speedReadings, reasoningReadings, sentKeys = preset, {}, {}, {}
+  if busy or not codexIsFrontmost() then
+    hs.printf("Codex switcher: ignored (busy=%s, Codex frontmost=%s)", tostring(busy), tostring(codexIsFrontmost()))
+    return
+  end
+  hs.printf("Codex switcher: modifiers released (%s)", preset.key)
+  activePreset, speedReadings, reasoningReadings, openingReadings, sentKeys = preset, {}, {}, {}, {}
   local window, bundleID = M.openPicker()
   if not window then return end
   busy, activeWindow, activeBundleID = true, window, bundleID
   hs.timer.doAfter(M.config.timing.picker, function()
     runKeySequence({}, 1, function()
-      local control = focusedElement()
-      local role = axAttribute(control, "AXRole")
-      local currentModel = readModel(control)
-      local opensModelList = false
-      for _, attribute in ipairs({"AXTitle", "AXDescription"}) do
-        local label = axAttribute(control, attribute)
-        if label == "Sélectionner le modèle" or label == "Sélectionner un modèle"
-            or label == "Select model" then opensModelList = true end
-      end
-      -- The current AX label names the action and hides the selected model.
-      -- Only open a confirmed model control, never send Return into the composer.
-      if (not currentModel and not opensModelList)
-          or (role ~= "AXMenuItem" and role ~= "AXButton")
-          or axAttribute(control, "AXEnabled") == false then
-        fail("modèle courant illisible dans le panneau (" .. tostring(role) .. ")")
-        return
-      end
-      local function finishModel()
-        if panelSpeed(focusedElement()) == preset.speed then
-          focusReasoning(preset, false)
-        else
-          setSpeed(preset.speed, function()
-            focusReasoning(preset, true)
-          end)
-        end
-      end
-      if currentModel == preset.model then finishModel(); return end
-      runKeySequence({ { key = "return", delay = M.config.timing.submenu } }, 1, function()
-        local selected = focusedElement()
-        local _, current = readModel(selected)
-        local _, target = modelIn(preset.model)
-        if not current or axAttribute(selected, "AXRole") ~= "AXMenuItem" then
-          fail("modèle sélectionné illisible dans la liste"); return
-        end
-        local steps = {}
-        for _ = 1, math.abs(target - current) do
-          steps[#steps + 1] = target < current and "up" or "down"
-        end
-        runKeySequence(steps, 1, function()
-          local chosen = focusedElement()
-          if readModel(chosen) ~= preset.model or axAttribute(chosen, "AXEnabled") == false then
-            fail("modèle demandé non confirmé dans la liste"); return
+      focusModel(function(currentModel)
+        local function finishModel()
+          if panelSpeed(focusedElement()) == preset.speed then
+            focusReasoning(preset, false)
+          else
+            setSpeed(preset.speed, function()
+              focusReasoning(preset, true)
+            end)
           end
-          runKeySequence({ { key = "return", delay = M.config.timing.modelSelected } }, 1, finishModel)
+        end
+        if currentModel == preset.model then finishModel(); return end
+        runKeySequence({ { key = "return", delay = M.config.timing.submenu } }, 1, function()
+          local selected = focusedElement()
+          local _, current = readModel(selected)
+          local _, target = modelIn(preset.model)
+          if not current or axAttribute(selected, "AXRole") ~= "AXMenuItem" then
+            fail("modèle sélectionné illisible dans la liste"); return
+          end
+          -- Model rows are asynchronous too: confirm each arrow before continuing.
+          local function choose(currentIndex, remaining)
+            if currentIndex == target then
+              local chosen = focusedElement()
+              if readModel(chosen) ~= preset.model or axAttribute(chosen, "AXEnabled") == false then
+                fail("modèle demandé non confirmé dans la liste"); return
+              end
+              runKeySequence({ { key = "return", delay = M.config.timing.modelSelected } }, 1, finishModel)
+              return
+            end
+            if remaining == 0 then fail("limite de déplacement des modèles atteinte"); return end
+            local direction = target < currentIndex and -1 or 1
+            moveFocus(direction == -1 and "up" or "down", function(chosen)
+              local _, observed = readModel(chosen)
+              if axAttribute(chosen, "AXRole") ~= "AXMenuItem" or observed ~= currentIndex + direction then
+                fail("modèle inattendu après déplacement, séquence arrêtée"); return
+              end
+              choose(observed, remaining - 1)
+            end)
+          end
+          choose(current, math.abs(target - current))
         end)
-      end)
+      end, 3)
     end)
   end)
 end
@@ -644,6 +703,7 @@ function M.start()
   for _, preset in ipairs(M.config.presets) do
     local boundPreset = preset
     table.insert(M.hotkeys, hs.hotkey.bind(M.config.shortcutModifiers, boundPreset.key, function()
+      hs.printf("Codex switcher: shortcut %s (busy=%s)", boundPreset.key, tostring(busy))
       if busy then return end
       afterShortcutModifiersReleased(function() selectPreset(boundPreset) end)
     end))
