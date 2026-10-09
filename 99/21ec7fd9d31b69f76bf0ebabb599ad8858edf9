@@ -1,0 +1,25 @@
+CHANGELOG.md
+  s_8a0fbb50670cb0::t_ea9f2553c2db6d 3-11
+README.md
+  s_8a0fbb50670cb0::t_2fc1a9b28e944c 3,5,7,18,42,44,56
+codex-model-shortcuts.lua
+  s_8a0fbb50670cb0::t_cba9a6103e985f 23,65,90-93,95-98,101,132-133,162,167,431-434,460-520,523,529,531,537-542,548-556,558-564,566-586,588,706
+test-picker.lua
+  s_8a0fbb50670cb0::t_cb7ccda987dac3 1,8-9,15-17,24-26,46,73-79,89-92,105,116-118,124-129,132,148,167-168,174,188-189,215,219,224,386-471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9921ec7fd9d31b69f76bf0ebabb599ad8858edf9",
+  "prompts": {},
+  "sessions": {
+    "s_8a0fbb50670cb0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a120e7-7c87-7890-a22d-c94fe8d216f0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "clement0909472 <clement.barberousse.pro@gmail.com>"
+    }
+  }
+}
