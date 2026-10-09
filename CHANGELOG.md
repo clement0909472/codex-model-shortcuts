@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026.10.09
+
+- Add Option + Command + G for GPT-6.1 Sol **Low + Ultrafast**. Existing H/J/K/L/M presets keep their settings.
+- Support the Sol 6.1 Standard/Fast/Ultrafast speed menu.
+- Fix switching after reopening the picker on another control and wait for delayed picker/model focus before sending another arrow or Enter. This includes the Astra-to-Sol route used by K.
+- Add picker-opening readings to local failure reports and lifecycle traces to the Hammerspoon console. Reports are never uploaded automatically.
+
+Validation: 10,176 simulated transitions plus targeted regression checks pass; the maintainer confirmed the updated shortcuts work in the native app. Other accounts and model catalogs remain unverified.
+
 ## 2026.09.30
 
 Updated for the September 2026 Codex picker, tested with Codex 26.928.21956 (12404).

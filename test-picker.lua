@@ -1,21 +1,29 @@
--- Offline keyboard contract from the September 30 screenshots and shipped picker.
+-- Offline keyboard contract, including the October 9 Sol 6.1 speed menu.
 local function element(a)
   return {attributeValue=function(_, k) return a[k] end}
 end
 local names = {'Par défaut', 'GPT-6.1 Sol', 'GPT-6 Astra', 'GPT-6 Sol', 'GPT-6 Luna', 'GPT-5.6 Sol', 'GPT-5.6 Terra', 'GPT-5.6 Luna', 'GPT-5.5'}
 local levels = {'Minimal', 'Moyen', 'Élevé', 'Très élevé', 'Maximum', 'Ultra'}
 local speeds = {'standard', 'fast', 'ultrafast'}
+local solDropdown = true
+local function hasSpeedMenu(model) return model == 3 or (model == 2 and solDropdown) end
 local speedLabels = {'Standard', 'Rapide', 'Ultrarapide'}
 local window = element({})
 local bundle, phase, model, effort, speed, pos, index, stripped, broken
 local timers, alerts, bindings, opens = {}, {}, {}, 0
 local keys = {}
+local logs = {}
+local openingPosition = 0
+local openingGroupReads = 0
 local noPanelSpeed = false
 local focusLag = 0
 local pendingFocus
 local droppedFocusKeys = 0
 local actionOnly = false
 local missingModelList = false
+local modelFocusLag = 0
+local pendingModelFocus
+local droppedModelKeys = 0
 local speedDescriptions = false
 local unreadableSpeed = false
 local speedNotReady = 0
@@ -35,7 +43,7 @@ local function panelControl(position)
       base.AXChildren={element({AXRole='AXStaticText',AXValue=levels[effort+1]}),element({AXRole='AXStaticText',AXValue=label(names[model])})}
     end
   elseif position == 1 then
-    if model == 3 then
+    if hasSpeedMenu(model) then
       local i = speed == 'standard' and 1 or speed == 'fast' and 2 or 3
       base.AXTitle='Vitesse '..speedLabels[i]
     else
@@ -62,7 +70,13 @@ panel={attributeValue=function(_, key)
 end}
 local function focused()
   if broken then return element({AXRole='AXTextArea', AXValue='draft'}) end
-  if phase == 'models' then return element({AXRole='AXMenuItem',AXTitle=missingModelList and '' or label(names[index])}) end
+  if phase == 'models' then
+    if pendingModelFocus then
+      pendingModelFocus.reads=pendingModelFocus.reads-1
+      if pendingModelFocus.reads<=0 then index=pendingModelFocus.index;pendingModelFocus=nil end
+    end
+    return element({AXRole='AXMenuItem',AXTitle=missingModelList and '' or label(names[index])})
+  end
   if phase == 'speeds' then
     if unreadableSpeed or speedNotReady > 0 then
       speedNotReady=math.max(0,speedNotReady-1)
@@ -72,6 +86,10 @@ local function focused()
     return element({AXRole='AXMenuItem',AXTitle=speedLabels[index]..(speedDescriptions and (' '..descriptions[index]) or '')})
   end
   if phase == 'panel' then
+    if openingGroupReads>0 then
+      openingGroupReads=openingGroupReads-1
+      return element({AXRole='AXGroup',AXParent=element({AXRole='AXWebArea'})})
+    end
     if pendingFocus then
       pendingFocus.reads=pendingFocus.reads-1
       if pendingFocus.reads<=0 then pos=pendingFocus.position;pendingFocus=nil end
@@ -84,6 +102,7 @@ local root={attributeValue=function(_, k)
   if k=='AXFocusedUIElement' then return focused() end
 end}
 hs={
+  printf=function(fmt, ...) logs[#logs+1]=string.format(fmt, ...) end,
   application={frontmostApplication=function() return {bundleID=function() return bundle end} end},
   axuielement={applicationElement=function() return root end},
   alert={show=function(s) alerts[#alerts+1]=s end},
@@ -94,17 +113,23 @@ hs={
     keyStroke=function(mods, key)
       if #mods>0 then
         assert(mods[1]=='ctrl' and mods[2]=='shift' and key=='m')
-        assert(phase=='closed'); phase='panel';pos=0;opens=opens+1;keys[#keys+1]='open';return
+        -- Installed composer.openModelPicker is idempotent: ct || trigger.click().
+        if phase=='closed' then phase='panel';pos=openingPosition end
+        opens=opens+1;keys[#keys+1]='open';return
       end
       keys[#keys+1]=key
       if broken then error('No keys after failed opening') end
       assert(key~='home', 'Never reset the current keyboard selection')
       if phase=='models' then
-        if key=='up' then index=index-1
-        elseif key=='down' then index=index+1
+        if key=='up' or key=='down' then
+          local nextIndex=index+(key=='up' and -1 or 1)
+          if modelFocusLag>0 then
+            if pendingModelFocus then droppedModelKeys=droppedModelKeys+1
+            else pendingModelFocus={index=nextIndex,reads=modelFocusLag} end
+          else index=nextIndex end
         elseif key=='return' then
           assert(index>1);model=index;phase='panel';pos=0
-          if model~=3 and speed=='ultrafast' then speed='standard' end
+          if not hasSpeedMenu(model) and speed=='ultrafast' then speed='standard' end
           if model==5 and effort==5 then effort=1 end
         else error(key) end
       elseif phase=='speeds' then
@@ -120,7 +145,7 @@ hs={
           else pos=nextPos end
         elseif key=='return' and pos==0 then phase='models';index=model
         elseif key=='return' and pos==1 then
-          if model==3 then phase='speeds';index=1
+          if hasSpeedMenu(model) then phase='speeds';index=1
           else speed=speed=='standard' and 'fast' or 'standard' end
         elseif key=='return' and pos==3 then phase='closed'
         elseif (key=='left' or key=='right') and pos==3 then
@@ -139,12 +164,14 @@ local function drain()
  while #timers>0 do table.remove(timers,1)();n=n+1;assert(n<120) end
 end
 local cases=0
+for initialPosition=0,3 do
+ openingPosition=initialPosition
 for _,only in ipairs({false,true}) do
  actionOnly=only
 for _,short in ipairs({false,true}) do
  for startModel=2,#names do
   for startEffort=0,(startModel==5 and 4 or 5) do
-   for startSpeed=1,(startModel==3 and 3 or 2) do
+   for startSpeed=1,(hasSpeedMenu(startModel) and 3 or 2) do
     for _,p in ipairs(m.config.presets) do
       stripped=short;model=startModel;effort=startEffort;speed=speeds[startSpeed]
       phase='closed';bundle='com.openai.codex';timers={};alerts={};keys={}
@@ -158,6 +185,8 @@ for _,short in ipairs({false,true}) do
  end
 end
 end
+end
+openingPosition=0
 actionOnly=false
 assert(opens==cases)
 for _, alias in ipairs({'Minimal', 'Léger', 'Faible', 'Low'}) do
@@ -183,14 +212,16 @@ model=3;effort=0;speed='fast';phase='closed';keys={}
 bindings.H();drain()
 assert(table.concat(keys, ',')=='open,down,return,down,down,return,down,down,return')
 -- A two-speed model toggles once and never enters a speed submenu.
+solDropdown=false
 model=2;effort=2;speed='fast';phase='closed';keys={}
 bindings.K();drain()
 assert(table.concat(keys, ',')=='open,down,return,down,down,return')
+solDropdown=true
 -- No visible panel speed means inspecting the speed row, not assuming Standard.
 model=3;effort=0;speed='standard';phase='closed';keys={};noPanelSpeed=true
 bindings.L();drain();noPanelSpeed=false
 assert(table.concat(keys, ',')=='open,down,down,down,return')
-print(cases..' keyboard transitions passed: Minimal, compact labels, Astra dropdown, other-model toggle, failed open, focus cancellation, no clicks')
+print(cases..' keyboard transitions passed: Minimal, compact labels, Astra and Sol dropdowns, legacy toggle, failed open, focus cancellation, no clicks')
 -- Diagnostic probes cover alternate AX sources, but never read a composer/window.
 local title = element({AXRole='AXStaticText',AXValue='GPT-6 Astra'})
 local visible = element({AXRole='AXStaticText',AXValue='Minimal'})
@@ -352,3 +383,89 @@ while phase~='closed' do table.remove(timers,1)() end
 bindings.M();drain()
 assert(opens==priorOpens+1 and model==2 and #alerts==0)
 print('Rapid navigation regression passed: no lost Down keys, Reset never activated, close-animation lock')
+
+-- G selects Sol Low Ultrafast; K returns to Standard through the same menu.
+assert(bindings.G)
+noPanelSpeed=false;actionOnly=false;siblingReasoning=true
+model=2;effort=2;speed='standard';phase='closed';keys={};alerts={}
+bindings.G();drain()
+assert(model==2 and effort==0 and speed=='ultrafast' and phase=='closed' and #alerts==0)
+assert(table.concat(keys, ',')=='open,down,return,down,down,return,down,down,left,left,return')
+keys={};alerts={}
+bindings.K();drain()
+assert(model==2 and effort==2 and speed=='standard' and phase=='closed' and #alerts==0)
+assert(table.concat(keys, ',')=='open,down,return,return,down,down,right,right,return')
+-- On an older/two-speed account, G stops without toggling or changing effort.
+solDropdown=false;model=2;effort=0;speed='standard';phase='closed';keys={};alerts={}
+bindings.G();drain()
+assert(model==2 and effort==0 and speed=='standard' and #alerts==1)
+assert(table.concat(keys, ',')=='open,down')
+assert(savedReport.error=='Ultrarapide indisponible sur ce compte/modèle')
+print('Sol 6.1 regression passed: G Ultrafast, K Standard, legacy-account stop')
+
+-- Actual failure: reopening on Power after G; label is in a sibling status.
+solDropdown=true;siblingReasoning=true;actionOnly=true;openingPosition=3
+model=2;effort=0;speed='ultrafast';phase='closed';keys={};alerts={}
+bindings.L();drain()
+assert(model==3 and effort==0 and speed=='standard' and phase=='closed' and #alerts==0)
+assert(keys[2]=='down' and keys[3]=='return')
+-- Starting on Speed/Reset and delayed focus also reaches the model safely.
+for _,position in ipairs({1,2,3}) do
+ openingPosition=position;focusLag=4;pendingFocus=nil;droppedFocusKeys=0
+ model=2;effort=0;speed='ultrafast';phase='closed';keys={};alerts={}
+ bindings.L();drain()
+ assert(model==3 and effort==0 and speed=='standard' and phase=='closed' and #alerts==0)
+ assert(droppedFocusKeys==0)
+end
+openingPosition=1;focusLag=1000;pendingFocus=nil
+model=2;effort=0;speed='ultrafast';phase='closed';keys={};alerts={}
+bindings.L();drain()
+assert(model==2 and effort==0 and speed=='ultrafast' and #alerts==1)
+assert(table.concat(keys, ',')=='open,down')
+print('Reopened picker regression passed: Power after G, all starting rows, delayed focus, stalled-focus stop')
+
+-- Installed source moves focus asynchronously. Wait without navigation keys.
+focusLag=0;pendingFocus=nil;openingPosition=3;openingGroupReads=4
+model=2;effort=0;speed='ultrafast';phase='closed';keys={};alerts={}
+bindings.L();drain()
+assert(model==3 and effort==0 and speed=='standard' and phase=='closed' and #alerts==0)
+assert(keys[2]=='down')
+-- Retrying a menu left open by an error must not toggle it closed.
+openingGroupReads=0;model=2;effort=0;speed='ultrafast';phase='panel';pos=3;keys={};alerts={}
+bindings.L();drain()
+assert(model==3 and effort==0 and speed=='standard' and phase=='closed' and #alerts==0)
+-- Persistent AXGroup outside a confirmed picker: no arrows, Return or text scan.
+openingGroupReads=1000;phase='closed';keys={};alerts={}
+bindings.M();drain()
+assert(#alerts==1 and table.concat(keys, ',')=='open')
+assert(savedReport.error=='modèle courant illisible dans le panneau (AXGroup)')
+assert(#savedReport.openingReadings==11 and savedReport.openingReadings[11].role=='AXGroup')
+assert(savedReport.failure.error=='focused_group_outside_confirmed_menu')
+print('Opening focus regression passed: delayed AXGroup, idempotent reopen, persistent-group stop without keys')
+
+-- Silent cancellation is now observable, and releases the shortcut lock.
+openingGroupReads=0;focusLag=0;pendingFocus=nil;openingPosition=0
+model=2;effort=2;speed='standard';phase='closed';bundle='com.openai.codex';logs={}
+bindings.G();bundle='other';drain()
+assert(logs[#logs]=='Codex switcher: cancelled (Codex no longer frontmost)')
+bundle='com.openai.codex';phase='closed';logs={};alerts={}
+bindings.G();drain()
+assert(logs[#logs]=='Codex switcher: completed (G)' and #alerts==0)
+print('Lifecycle logs passed: trigger, cancellation reason, lock release and completion')
+
+-- Native K failure: Up is sent, but AX still reports Astra for several reads.
+openingGroupReads=0;modelFocusLag=4;pendingModelFocus=nil;droppedModelKeys=0
+actionOnly=true;siblingReasoning=true;model=3;effort=0;speed='standard';phase='closed';keys={};alerts={}
+bindings.K();drain()
+assert(model==2 and effort==2 and speed=='standard' and phase=='closed' and #alerts==0)
+assert(droppedModelKeys==0)
+-- Every step of a longer model move must be confirmed independently.
+model=5;effort=4;speed='standard';phase='closed';keys={};alerts={};pendingModelFocus=nil
+bindings.K();drain()
+assert(model==2 and effort==2 and phase=='closed' and #alerts==0 and droppedModelKeys==0)
+-- Stalled model focus: one arrow, no Return on the old model.
+modelFocusLag=1000;pendingModelFocus=nil;model=3;phase='closed';keys={};alerts={}
+bindings.K();drain()
+assert(model==3 and phase=='models' and #alerts==1)
+assert(table.concat(keys, ',')=='open,return,up')
+print('Model focus regression passed: native K case, delayed multi-step moves, stalled-focus stop')

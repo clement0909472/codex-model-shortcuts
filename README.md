@@ -1,12 +1,10 @@
 # Codex Model Shortcuts
 
-Five keyboard presets for the September 2026 Codex desktop model picker on macOS, using [Hammerspoon](https://www.hammerspoon.org/).
+Six keyboard presets for the October 2026 Codex desktop model picker on macOS, using [Hammerspoon](https://www.hammerspoon.org/).
 
-**Supported setup for the complete default preset set: ChatGPT Pro $500/month (USD), with GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna and Astra Ultrafast available in the picker.** Other personal plans are not supported by these defaults as-is, because H requires Astra Ultrafast. The script does not grant model access or change your subscription.
+The complete default preset set requires GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna and Ultrafast for both Astra and Sol 6.1 to be available in your picker. The script does not grant model access or change your subscription. Other model catalogs need their own validation.
 
-OpenAI also lists eligible Enterprise/Edu access to Ultrafast; those configurations have not been validated by this project. See the official [plan pricing](https://learn.chatgpt.com/docs/pricing) and [Ultrafast availability](https://learn.chatgpt.com/docs/agent-configuration/speed#ultrafast-mode). Prices here are USD, not a claim about local euro pricing.
-
-Updated for Codex **26.928.21956 (build 12404)** on September 30, 2026. The full preset configuration was exercised manually by the maintainer; the final rapid-navigation patch has regression-test coverage and awaits an additional manual check. Future Codex releases may change the picker.
+Updated on October 9, 2026 for the Sol 6.1 Standard/Fast/Ultrafast menu. The maintainer confirmed the updated shortcuts work in the native app after the navigation fixes. Offline regression tests cover 10,176 simulated transitions and targeted failure cases. Future Codex releases may change the picker.
 
 ## Shortcuts
 
@@ -17,6 +15,7 @@ Updated for Codex **26.928.21956 (build 12404)** on September 30, 2026. The full
 | Option + Command + K | GPT-6.1 Sol | High / Élevé | Standard |
 | Option + Command + J | GPT-6 Luna | Max / Maximum | Standard |
 | Option + Command + H | GPT-6 Astra | Low / Minimal | Ultrafast |
+| Option + Command + G | GPT-6.1 Sol | Low / Minimal | Ultrafast |
 
 Low can appear as Minimal or Léger. Medium/High can be announced as Standard/Extended by the accessibility layer. Ultra reasoning and Ultrafast speed are different settings; none of these presets requests Ultra reasoning.
 
@@ -40,9 +39,9 @@ If needed, install Hammerspoon with `brew install --cask hammerspoon`. Enable it
 
 ## How it works
 
-The script opens the native picker with Control + Shift + M. It reads the focused model in the list when the initial control only says “Select model”, then calculates the relative arrow movement. It supports Astra's Standard/Fast/Ultrafast menu and the Standard/Fast toggle on other models.
+The script opens the native picker with Control + Shift + M. It reads the focused model in the list when the initial control only says “Select model”, then calculates the relative arrow movement. It supports the Standard/Fast/Ultrafast menus on Astra and Sol 6.1, and the Standard/Fast toggle on other models.
 
-Navigation waits for focus to move between Speed, Reset and Power; it never activates Reset. Reasoning is read from the control or its adjacent live status. Each Left/Right press must produce the expected next level before another is sent. Stale values, contradictory labels, disabled controls and unexpected focus stop the sequence. A short closing delay prevents another preset from reopening a picker that is still closing. Extra preset presses during a switch are ignored rather than queued.
+Opening waits for the picker focus to become readable. Navigation handles restored focus on Model, Speed, Reset or Power, confirms each model-list arrow before continuing, and never activates Reset. Reasoning is read from the control or its adjacent live status. Each Left/Right press must produce the expected next level before another is sent. Stale values, contradictory labels, disabled controls and unexpected focus stop the sequence. A short closing delay prevents another preset from reopening a picker that is still closing. Extra preset presses during a switch are ignored rather than queued.
 
 The last selection action is Enter on Power. There is no mouse click, account switch, message submission or extra composer-focus operation. App/window changes cancel the sequence. A legacy custom-app bundle ID remains recognized for compatibility but is not part of this release's validation.
 
@@ -54,7 +53,7 @@ Diagnostics remain enabled. On failure, the script writes the latest local repor
 ~/.hammerspoon/codex-model-shortcuts/diagnostic.json
 ```
 
-It records the requested preset, sent keys, model/effort readings and bounded accessibility details of the relevant controls. `completed: false` means the preset did not finish; earlier changes are not automatically rolled back. The next failure overwrites the previous report.
+It records the requested preset, sent keys, model/effort readings and bounded accessibility details of the relevant controls. `completed: false` means the preset did not finish; earlier changes are not automatically rolled back. The next failure overwrites the previous report. The Hammerspoon console also records shortcut receipt, picker opening, completion and cancellation reasons, without conversation text or window titles.
 
 For a separate read-only probe, start with the picker closed and press **Control + Option + Command + D**. It opens the picker, samples it and reveals the report in Finder without selecting a model.
 
